@@ -1,0 +1,20 @@
+[package]
+name = "6531503070/quid"
+description = "A suitable uid for representing entity uniqueness. While providing version-detectability, k-sortability and human-readability"
+version = "1.0.1"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+license = "MIT"
+authors = ["6531503070"]
+exclude = ["**"]
+include = [
+    "src",
+    "src/**",
+    "wally.toml",
+    "wally.lock",
+    "default.project.json",
+    "LICENSE.md",
+]
+
+[dev-dependencies]
+sha256 = "dekkonot/sha256@1.0.1"
