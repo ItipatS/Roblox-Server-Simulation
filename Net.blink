@@ -1,6 +1,20 @@
 option ClientOutput = "net/client.luau"
 option ServerOutput = "net/server.luau"
 
+enum state {
+    Idle = 0,
+    Patrol = 1,
+    Chase = 2,
+    Attack = 3,
+    Flee = 4,
+    Dead = 5,
+}
+
+struct MobsState {
+    id: u16,
+    current: state,
+}
+
 struct Transform {
     id: u16,
     dp: vector<f16>,
@@ -9,6 +23,17 @@ struct Transform {
 struct TransformFull {
     id: u16,
     dp: vector<f32>,
+}
+
+struct spawnMob {
+    id: u16,
+    cframe: CFrame,
+    mobType: u8,
+}
+
+struct DespawnMob {
+    id: u16,
+    reason: u8,
 }
 
 event UpdateTransformDelta {
@@ -31,6 +56,22 @@ event SpawnMob {
     From: Server,
     Type: Reliable,
     Call: SingleSync,
-    Poll: true,
-    Data: (f16, CFrame, u8)
+    Poll: false,
+    Data: spawnMob[]
 }
+
+event DespawnMob {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: DespawnMob[]
+}
+
+event UpdateMobsState {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: MobsState[]
+}   

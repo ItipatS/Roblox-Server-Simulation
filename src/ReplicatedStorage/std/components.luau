@@ -9,13 +9,15 @@ local components: {
 	Player: Entity,
 	Target: Entity,
 	Transform: Entity<{ new: CFrame, old: CFrame }>,
-	Velocity: Entity<number>,
+	Speed: Entity<number>,
+	Velocity: Entity<Vector3>,
 	Previous: Entity,
 	Size: Entity<number>,
 
 	--Physics)
-	Gravity: Entity<{ velocity: number, grounded: boolean }>,
+	Gravity: Entity<{ vy: number, enabled: boolean? }>,
     Knockback: Entity<{ force: Vector3, remaining: number }>,
+	StaticCollider: Entity<{size:Vector3, center: Vector3?}>,
     Collider: Entity<{ radius: number }>,
     Grounded: Entity,
 
@@ -23,6 +25,7 @@ local components: {
     StateMachine: Entity<{ current: string, states: {[string]: any} }>,
     ChaseTarget: Entity<{ target: number?, range: number, loseRange: number }>,
     Patrol: Entity<{ points: {Vector3}, current: number, wait: number }>,
+	
     Wander: Entity<{ center: Vector3, radius: number, nextMove: number }>,
     Aggressive: Entity<{ attackRange: number, damage: number, cooldown: number }>,
     Flee: Entity<{ from: number?, fleeRange: number, speed: number }>,
@@ -39,6 +42,7 @@ local components: {
 		Player = world:component(),
 		Target = world:component(),
 		Transform = world:component(),
+		Speed = world:component(),
 		Velocity = world:component(),
 		Previous = world:component(),
 		Size = world:component(),
@@ -46,6 +50,7 @@ local components: {
 		Gravity = world:component(),
 		Knockback = world:component(),
 		Collider = world:component(),
+		StaticCollider = world:component(),
 		Grounded = world:component(),
 
 		StateMachine = world:component(),

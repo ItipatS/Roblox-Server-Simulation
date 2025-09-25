@@ -9,6 +9,8 @@ local cts = require(std.components)
 local scheduler = require(std.scheduler)
 local phases = require(std.phases)
 
+local mailbox = require(std.mailbox)
+ 
 local Transform = cts.Transform
 local Velocity = cts.Velocity
 local StateMachine = cts.StateMachine
@@ -21,13 +23,6 @@ local Timer = cts.Timer
 local Player = cts.Player
 local Character = cts.Character
 local Mob = cts.Mob
-local PendingMovements = cts.PendingMovements
-
---[[ Data store for movements
-local SystemData = world:entity()
-world:set(SystemData, PendingMovements, {})
-]]
-local SystemData = world:query(PendingMovements):cached()
 
 -- Utility functions
 local function getPlayerPositions(): {Vector3}
@@ -63,7 +58,6 @@ end
 -- Chase Behavior System
 local function chaseSystem(dt: number)
     local targets = getPlayerPositions()
-    local movements = world:get(SystemData, PendingMovements)
     
     for entity, transform, velocity, chase in world:query(Transform, Velocity, ChaseTarget):with(Mob) do
         local position = transform.new.Position
@@ -82,7 +76,7 @@ local function chaseSystem(dt: number)
                 -- Don't get too close
                 if distance > 3 then
                     transform.new = CFrame.new(position + movement, direction)
-                    movements[#movements + 1] = { id = entity, dp = movement }
+                    mailbox.push(cts.PendingMovements, { id = entity, dp = movement })
                 end
                 
             elseif distance > chase.loseRange then
@@ -93,14 +87,10 @@ local function chaseSystem(dt: number)
             chase.target = nil
         end
     end
-    
-    world:set(SystemData, PendingMovements, movements)
 end
 
 -- Patrol Behavior System
-local function patrolSystem(dt: number)
-    local movements = world:get(SystemData, PendingMovements)
-    
+local function patrolSystem(dt: number) 
     for entity, transform, velocity, patrol, timer in world:query(Transform, Velocity, Patrol, Timer):with(Mob) do
         local position = transform.new.Position
         
@@ -124,17 +114,14 @@ local function patrolSystem(dt: number)
                 local movement = direction * speed * dt
                 
                 transform.new = CFrame.new(position + movement, direction)
-                movements[#movements + 1] = { id = entity, dp = movement }
+                mailbox.push(cts.PendingMovements, { id = entity, dp = movement })
             end
         end
     end
-    
-    world:set(SystemData, PendingMovements, movements)
 end
 
 -- Wander Behavior System  
 local function wanderSystem(dt: number)
-    local movements = world:get(SystemData, PendingMovements)
     
     for entity, transform, velocity, wander, timer in world:query(Transform, Velocity, Wander, Timer):with(Mob) do
         local position = transform.new.Position
@@ -158,21 +145,18 @@ local function wanderSystem(dt: number)
                 local movement = direction * speed * dt
                 
                 transform.new = CFrame.new(position + movement, direction)
-                movements[#movements + 1] = { id = entity, dp = movement }
+                mailbox.push(cts.PendingMovements, { id = entity, dp = movement })
             end
             
             timer.remaining = math.random(2, 5)  -- Next wander
         end
     end
-    
-    world:set(SystemData, PendingMovements, movements)
 end
 
 -- State Machine System
-local function stateMachineSystem(dt: number)
+local function stateMachineSystem()
     for entity, stateMachine in world:query(StateMachine):with(Mob) do
         local currentState = stateMachine.current
-        local stateData = stateMachine.states[currentState]
         
         -- Example state transitions
         if currentState == "idle" then
@@ -214,11 +198,11 @@ local function stateMachineSystem(dt: number)
     end
 end
 
---[[ Register all systems
+--[[Register all systems
 scheduler.SYSTEM(stateMachineSystem, phases.AIBehavior)
 scheduler.SYSTEM(chaseSystem, phases.AIBehavior)
 scheduler.SYSTEM(patrolSystem, phases.AIBehavior)
-scheduler.SYSTEM(wanderSystem, phases.AIBehavior)
-]]
+scheduler.SYSTEM(wanderSystem, phases.AIBehavior)]]
+
 
 return 0

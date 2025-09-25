@@ -14,7 +14,7 @@ local mailbox = require(std.mailbox)
 
 local Mob = cts.Mob
 local Transform = cts.Transform
-local Velocity = cts.Velocity
+local Speed = cts.Speed
 local Player = cts.Player
 local Character = cts.Character
 local Size = cts.Size
@@ -38,7 +38,7 @@ local characters = world
 	:cached()
 
 local moving_mobs = world
-	:query(Transform, Velocity, Size)
+	:query(Transform, Speed, Size)
 	:with(Mob)
 	:cached()
 

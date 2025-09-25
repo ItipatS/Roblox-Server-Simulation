@@ -11,153 +11,205 @@ local phases = require(std.phases)
 
 local Transform = cts.Transform
 local Velocity = cts.Velocity
-local Size = cts.Size
 local Gravity = cts.Gravity
 local Knockback = cts.Knockback
 local Collider = cts.Collider
 local Grounded = cts.Grounded
 local Mob = cts.Mob
 
--- ===== Physics Constants =====
-local GRAVITY_FORCE = -196.2  -- Roblox gravity
-local TERMINAL_VELOCITY = -200
-local GROUND_CHECK_DISTANCE = 0.5
-local MOB_HEIGHT = 4
+-- =================== constants ===================
+local GRAVITY_ACC          = -196.2              -- Roblox default
+local TERMINAL_VY          = -200.0
+local STEP_MAX_Y           = 0.5                 -- max “snap up” to ground (studs)
+local GROUND_PROBE_UP      = 1.0                 -- start a little above feet
+local GROUND_PROBE_DOWN    = 5.0                 -- how far we probe downward
+local SKIN_WIDTH           = 0.05                -- small separation to avoid sinking
+local GRID_SIZE            = 16                  -- spatial hashing cell size
+local RESOLVE_ITERATIONS   = 1                   -- simple positional solve passes
+local MAX_NEIGHBOR_CELLS   = 1                   -- 3x3 neighborhood
 
--- ===== Spatial Grid for Collision =====
-local GRID_SIZE = 16
+-- =================== helpers ===================
+local function setPosPreserveRot(cf: CFrame, p: Vector3): CFrame
+    -- Recompose with original orientation (no roll loss)
+    -- CFrame.fromMatrix expects basis axes; Roblox LookVector is +Z (forward).
+    return CFrame.fromMatrix(p, cf.RightVector, cf.UpVector, cf.LookVector)
+end
+
+local function moveBy(cf: CFrame, dp: Vector3): CFrame
+    return setPosPreserveRot(cf, cf.Position + dp)
+end
+
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Exclude
+groundParams.FilterDescendantsInstances = {} -- set externally if you want to ignore some things
+groundParams.IgnoreWater = true
+
+local function raycastGround(origin: Vector3, down: number): RaycastResult?
+    return workspace:Raycast(origin, Vector3.new(0, -down, 0), groundParams)
+end
+
+-- =================== spatial grid ===================
 local spatialGrid: {[string]: {number}} = {}
+local function gridKey(x: number, z: number): string
+    return string.format("%d,%d", x, z)
+end
 
 local function clearSpatialGrid()
-    for key in spatialGrid do
-        spatialGrid[key] = nil
+    for k in spatialGrid do
+        spatialGrid[k] = nil
     end
 end
 
-local function addToGrid(entity: number, position: Vector3)
-    local x, z = math.floor(position.X / GRID_SIZE), math.floor(position.Z / GRID_SIZE)
-    local key = x .. "," .. z
-    
-    if not spatialGrid[key] then
-        spatialGrid[key] = {}
+local function addToGrid(e: number, p: Vector3)
+    local gx, gz = math.floor(p.X / GRID_SIZE), math.floor(p.Z / GRID_SIZE)
+    local key = gridKey(gx, gz)
+    local bin = spatialGrid[key]
+    if not bin then
+        bin = {}
+        spatialGrid[key] = bin
     end
-    
-    table.insert(spatialGrid[key], entity)
+    bin[#bin+1] = e
 end
 
-local function getNearbyEntities(position: Vector3): {number}
-    local x, z = math.floor(position.X / GRID_SIZE), math.floor(position.Z / GRID_SIZE)
-    local nearby = {}
-    
-    -- Check 3x3 grid around position
-    for dx = -1, 1 do
-        for dz = -1, 1 do
-            local key = (x + dx) .. "," .. (z + dz)
-            if spatialGrid[key] then
-                for _, entity in spatialGrid[key] do
-                    table.insert(nearby, entity)
+local function getNearby(entityPos: Vector3): {number}
+    local gx, gz = math.floor(entityPos.X / GRID_SIZE), math.floor(entityPos.Z / GRID_SIZE)
+    local list = table.create(32)
+    for dx = -MAX_NEIGHBOR_CELLS, MAX_NEIGHBOR_CELLS do
+        for dz = -MAX_NEIGHBOR_CELLS, MAX_NEIGHBOR_CELLS do
+            local bin = spatialGrid[gridKey(gx+dx, gz+dz)]
+            if bin then
+                for i = 1, #bin do 
+                    list[#list+1] = bin[i] 
                 end
             end
         end
     end
-    
-    return nearby
+    return list
 end
 
--- ===== Gravity System =====
-local gravity_entities = world:query(Transform, Gravity):cached()
+-- =================== queries ===================
+local qGravity   = world:query(Transform, Gravity):with(Mob):cached()
+local qXZ        = world:query(Transform, Velocity):with(Mob):cached()
+local qKnockback = world:query(Transform, Knockback):with(Mob):cached()
+local qColliders = world:query(Transform, Collider):with(Mob):cached()
 
+-- =================== systems ===================
+
+-- 1) Apply gravity (vertical integration only)
 local function gravitySystem(dt: number)
-    for entity, transform, gravity in gravity_entities do
-        local position = transform.new.Position
-        
-        -- Apply gravity if not grounded
-        if not gravity.grounded then
-            gravity.velocity = math.max(gravity.velocity + GRAVITY_FORCE * dt, TERMINAL_VELOCITY)
-            
-            -- Move down
-            local newY = position.Y + gravity.velocity * dt
-            
-            -- Ground check (raycast to terrain)
-            local rayOrigin = Vector3.new(position.X, newY + GROUND_CHECK_DISTANCE, position.Z)
-            local rayDirection = Vector3.new(0, -GROUND_CHECK_DISTANCE * 2, 0)
-            local raycast = workspace:Raycast(rayOrigin, rayDirection)
-            
-            if raycast and raycast.Instance == workspace.Terrain then
-                -- Hit ground
-                newY = raycast.Position.Y + MOB_HEIGHT / 2
-                gravity.velocity = 0
-                gravity.grounded = true
-                world:add(entity, Grounded)
-            else
-                -- Still falling
-                gravity.grounded = false
-                world:remove(entity, Grounded)
-            end
-            
-            -- Update position
-            transform.new = CFrame.new(Vector3.new(position.X, newY, position.Z), transform.new.LookVector)
+    for e, tf, g in qGravity do
+        if g.enabled ~= false then
+            g.vy = math.max((g.vy or 0) + GRAVITY_ACC * dt, TERMINAL_VY)
+            tf.new = moveBy(tf.new, Vector3.new(0, (g.vy or 0) * dt, 0))
+        end
+        -- clear grounded tag for now; grounding step will add it back if applicable
+        if world:has(e, Grounded) then
+            world:remove(e, Grounded)
         end
     end
 end
 
--- ===== Knockback System =====
-local knockback_entities = world:query(Transform, Knockback):cached()
+-- 2) Integrate horizontal velocity (and optional y if you store it in Velocity)
+local function integrateXZSystem(dt: number)
+    for _, tf, vel in qXZ do
+        local v = vel.v
+        if v and (v.X ~= 0 or v.Z ~= 0 or v.Y ~= 0) then
+            tf.new = moveBy(tf.new, v * dt)
+        end
+    end
+end
 
+-- 3) Apply knockback (additive positional)
 local function knockbackSystem(dt: number)
-    for entity, transform, knockback in knockback_entities do
-        -- Apply knockback movement
-        local movement = knockback.force * dt
-        transform.new = transform.new + movement
-        
-        -- Reduce remaining time
-        knockback.remaining -= dt
-        
-        if knockback.remaining <= 0 then
-            world:remove(entity, Knockback)
+    for e, tf, kb in qKnockback do
+        tf.new = moveBy(tf.new, kb.force * dt)
+        kb.remaining -= dt
+        if kb.remaining <= 0 then
+            world:unset(e, Knockback)
         end
     end
 end
 
--- ===== Collision System =====
-local collision_entities = world:query(Transform, Collider):with(Mob):cached()
+-- 4) Grounding (raycast down; snap up/down within small band; set vy=0)
+local function groundingSystem(_dt: number)
+    for e, tf, g in qGravity do
+        local pos = tf.new.Position
+        -- probe around feet (slightly above current pos)
+        local origin = pos + Vector3.new(0, GROUND_PROBE_UP, 0)
+        local res = raycastGround(origin, GROUND_PROBE_UP + GROUND_PROBE_DOWN)
 
-local function collisionSystem(dt: number)
+        if res then
+            -- accept hits on Terrain or BaseParts
+            local inst = res.Instance
+            if inst == workspace.Terrain or (inst and inst:IsA("BasePart")) then
+                local hitY = res.Position.Y
+                local targetY = hitY + SKIN_WIDTH
+                local deltaY = targetY - pos.Y
+                -- snap within band; if we fell through, bring us back up to surface
+                if deltaY >= -STEP_MAX_Y and deltaY <= (GROUND_PROBE_DOWN + GROUND_PROBE_UP) then
+                    tf.new = setPosPreserveRot(tf.new, Vector3.new(pos.X, targetY, pos.Z))
+                    g.vy = 0
+                    if not world:has(e, Grounded) then
+                        world:set(e, Grounded, true)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- 5) Dynamic sphere-sphere collisions (simple positional solve)
+local function collisionSystem(_dt: number)
     clearSpatialGrid()
-    
-    -- Build spatial grid
-    for entity, transform, collider in collision_entities do
-        addToGrid(entity, transform.new.Position)
+    -- bin all mobiles
+    for e, tf, _ in qColliders do
+        addToGrid(e, tf.new.Position)
     end
-    
-    -- Check collisions
-    for entity, transform, collider in collision_entities do
-        local position = transform.new.Position
-        local radius = collider.radius
-        
-        local nearby = getNearbyEntities(position)
-        
-        for _, otherEntity in nearby do
-            if entity ~= otherEntity and world:has(otherEntity, Collider) then
-                local otherTransform = world:get(otherEntity, Transform)
-                local otherCollider = world:get(otherEntity, Collider)
-                
-                if otherTransform and otherCollider then
-                    local otherPos = otherTransform.new.Position
-                    local distance = (position - otherPos).Magnitude
-                    local minDistance = radius + otherCollider.radius
-                    
-                    if distance < minDistance and distance > 0 then
-                        -- Collision! Push apart
-                        local pushDirection = (position - otherPos).Unit
-                        local pushAmount = (minDistance - distance) * 0.5
-                        
-                        -- Move both entities apart
-                        local newPos = position + pushDirection * pushAmount
-                        transform.new = CFrame.new(newPos, transform.new.LookVector)
-                        
-                        local otherNewPos = otherPos - pushDirection * pushAmount  
-                        otherTransform.new = CFrame.new(otherNewPos, otherTransform.new.LookVector)
+
+    -- single-pass positional correction with pair de-dup
+    local handled: {[number]: true} = {}
+    for e, tf, col in qColliders do
+        local p = tf.new.Position
+        local r = col.radius
+        local neighbors = getNearby(p)
+
+        for i = 1, #neighbors do
+            local o = neighbors[i]
+            if o ~= e then
+                -- ensure each unordered pair is processed once
+                local a, b = e, o
+                if a > b then
+                    a, b = b, a
+                end
+                local key = ("%d:%d"):format(a, b)
+                if not handled[key] and world:has(o, Collider) then
+                    handled[key] = true
+
+                    local otf = world:get(o, Transform) :: any
+                    local ocol = world:get(o, Collider)  :: any
+                    if otf and ocol then
+                        local op = otf.new.Position
+                        local rr = r + ocol.radius
+                        local delta = p - op
+                        local dist2 = delta.X*delta.X + delta.Y*delta.Y + delta.Z*delta.Z
+                        if dist2 > 0 then
+                            local dist = math.sqrt(dist2)
+                            if dist < rr then
+                                local n = delta / dist
+                                local push = (rr - dist) * 0.5 + SKIN_WIDTH
+                                -- move both apart
+                                p   = p   + n * push
+                                op  = op  - n * push
+                                tf.new  = setPosPreserveRot(tf.new,  p)
+                                otf.new = setPosPreserveRot(otf.new, op)
+                            end
+                        else
+                            -- perfectly overlapping positions; nudge deterministically
+                            local n = Vector3.new(1, 0, 0)
+                            local push = rr * 0.5 + SKIN_WIDTH
+                            p  = p  + n * push
+                            tf.new = setPosPreserveRot(tf.new, p)
+                        end
                     end
                 end
             end
@@ -165,39 +217,18 @@ local function collisionSystem(dt: number)
     end
 end
 
--- ===== Terrain Collision System =====
-local function terrainCollisionSystem(dt: number)
-    for entity, transform in world:query(Transform):with(Mob) do
-        local position = transform.new.Position
-        
-        -- Check if position is inside terrain
-        local region = Region3.new(
-            position - Vector3.new(1, 1, 1),
-            position + Vector3.new(1, 1, 1)
-        )
-        
-        local material, occupancy = workspace.Terrain:ReadVoxels(region, 4)
-        local size = material.Size
-        
-        -- Simple terrain collision - if any voxel is occupied, push up
-        for x = 1, size.X do
-            for y = 1, size.Y do
-                for z = 1, size.Z do
-                    if occupancy[x][y][z] > 0 then
-                        -- Push mob above terrain
-                        local newY = position.Y + 2
-                        transform.new = CFrame.new(Vector3.new(position.X, newY, position.Z), transform.new.LookVector)
-                        break
-                    end
-                end
-            end
-        end
+-- (Optional) multiple iterations to reduce interpenetration
+local function collisionSolve(dt: number)
+    for _ = 1, RESOLVE_ITERATIONS do
+        collisionSystem(dt)
     end
 end
 
---[[scheduler.SYSTEM(knockbackSystem, phases.Physics)
-scheduler.SYSTEM(gravitySystem, phases.Physics)
-scheduler.SYSTEM(terrainCollisionSystem, phases.Physics)
-scheduler.SYSTEM(collisionSystem, phases.Physics)]]
+
+scheduler.SYSTEM(knockbackSystem, phases.Physics)
+scheduler.SYSTEM(integrateXZSystem, phases.Physics)
+scheduler.SYSTEM(gravitySystem, phases.PhysicsGravity)
+scheduler.SYSTEM(groundingSystem,phases.PhysicsTerrain)
+scheduler.SYSTEM(collisionSolve, phases.PhysicsCollision)
 
 return {}

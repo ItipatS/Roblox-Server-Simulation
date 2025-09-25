@@ -13,9 +13,15 @@ local scheduler = require(std.scheduler)
 local phases = require(std.phases)
 
 local Transform = cts.Transform
+local Speed = cts.Speed
 local Velocity = cts.Velocity
 local Size = cts.Size
 local Mob = cts.Mob
+local Gravity = cts.Gravity
+local Knockback = cts.Knockback
+local Collider = cts.Collider
+
+local Aggressive = cts.Aggressive
 local StateMachine = cts.StateMachine
 local Wander = cts.Wander
 local Patrol = cts.Patrol
@@ -97,9 +103,11 @@ local function spawnMobs()
 		local e = world:entity()
 
 		world:set(e, Size, size)
-		world:set(e, Velocity, v)
+		world:set(e, Speed, v)
 		world:set(e, Transform, { new = cf })
 		world:add(e, Mob)
+        world:set(e, Gravity,   { vy = 0, enabled = true })
+        world:set(e, Collider,  { radius = size })
 
 		blink.SpawnMob.FireAll(e, cf, size)
         count += 1
