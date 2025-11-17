@@ -6,12 +6,4 @@ realm = "shared"
 
 [dependencies]
 jabby = "alicesaidhi/jabby@0.2.2"
-vide = "centau/vide@0.3.1"
-Quid = "6531503070/quid@1.0.1"
-sha256 = "dekkonot/sha256@1.0.1"
-Signal = "sleitnick/signal@^1"
-TableUtil = "sleitnick/table-util@^1"
-Lyra = "paradoxum-games/lyra@0.6.0"
-zoneplus = "mattschrubb/zoneplus@3.2.0"
-cmdr = "evaera/cmdr@1.12.0"
 jecs = "ukendio/jecs@0.9.0"

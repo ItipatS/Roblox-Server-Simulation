@@ -1,0 +1,23 @@
+{
+  "className": "TextLabel",
+  "properties": {
+    "BackgroundColor3": [0, 0, 0],
+    "BackgroundTransparency": 0.5,
+    "BorderColor3": [0, 0, 0],
+    "BorderSizePixel": 0,
+    "FontFace": {
+      "family": "rbxasset://fonts/families/PressStart2P.json",
+      "weight": "Regular",
+      "style": "Normal",
+      "cachedFaceId": null
+    },
+    "Position": [[0.7789, 0.0], [0.9405, 0.0]],
+    "RichText": true,
+    "Size": [[0.0, 294.0], [0.0, 50.0]],
+    "Text": "Mob Count :",
+    "TextColor3": [0, 0, 0],
+    "TextScaled": true,
+    "TextSize": 14,
+    "TextWrapped": true
+  }
+}

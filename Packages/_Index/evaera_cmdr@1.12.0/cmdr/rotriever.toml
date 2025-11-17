@@ -1,6 +1,0 @@
-[package]
-name = "evaera/Cmdr"
-author = "evaera"
-content_root = "Cmdr"
-version = "1.12.0"
-license = "MIT"
