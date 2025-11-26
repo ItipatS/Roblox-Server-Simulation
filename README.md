@@ -12,9 +12,8 @@ The current demo runs **~150 server-driven mobs** with behavior logic and pathin
 
 ---
 ## Demo Video
-<a href="(https://youtu.be/gHYBNYAAr0k)" target="_blank" rel="noopener noreferrer">
-  <img src="https://img.youtube.com/vi/gHYBNYAAr0k/hqdefault.jpg" alt="Watch the video">
-</a>
+
+[![Watch the video](https://img.youtube.com/vi/SmI4C2KEHj0/0.jpg)](https://youtu.be/SmI4C2KEHj0)
 
 ##  Highlights
 
