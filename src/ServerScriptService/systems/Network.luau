@@ -1,3 +1,4 @@
+--ServerScripterService/Systems/Network.luau
 --!optimize 2
 --!native
 --!strict
@@ -23,7 +24,8 @@ local last_accum = 0
 local ToSendFull = table.create(128)
 local ToSendDelta = table.create(MAX_BATCH_SIZE)
 
-local moving_mobs = world:query(cts.Transform, cts.Velocity, cts.Size):with(cts.Mob):cached()
+local moving_mobs = world:query(cts.Transform, cts.Velocity, cts.Size):with(cts.Dust):cached()
+local stated_mob = world:query(cts.DustState):with(cts.Dust):cached()
 
 local function flush(ev, arr)
     if #arr > 0 then 
@@ -47,6 +49,13 @@ local function networkSystem(dt: number)
         ToSendDelta[#ToSendDelta+1] = item
         if #ToSendDelta >= MAX_BATCH_SIZE then
             flush(blink.UpdateTransformDelta, ToSendDelta)
+        end
+    end)
+
+    mailbox.drain(cts.PendingStates, function(item)
+        ToSendDelta[#ToSendDelta+1] = item
+        if #ToSendDelta >= MAX_BATCH_SIZE then
+            flush(blink.DustState, ToSendDelta)
         end
     end)
 

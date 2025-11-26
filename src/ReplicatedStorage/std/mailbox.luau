@@ -18,7 +18,7 @@ local function ensureSYS(comp)
     return e
 end
 
-function M.getBuf(comp)
+local function getBuf(comp)
     local buf = M.bufByComp[comp]
     if buf then return buf end
     local sys = ensureSYS(comp)
@@ -33,22 +33,26 @@ function M.getBuf(comp)
     return buf
 end
 
-function M.push(comp, item)
-    local b = M.getBuf(comp)
+local function push(comp, item)
+    local b = getBuf(comp)
     b[#b+1] = item
 end
 
-function M.drain(comp, fn)
-    local b = M.getBuf(comp)
+local function drain(comp, fn)
+    local b = getBuf(comp)
     for i=1,#b do
         fn(b[i])
     end
     table.clear(b)
 end
 
-function M.invalidate()  -- for hot-reload
+local function invalidate()  -- for hot-reload
     M.sys = nil
     table.clear(M.bufByComp)
 end
 
-return M
+return {
+    push = push,
+    drain = drain,
+    invalidate = invalidate,
+}

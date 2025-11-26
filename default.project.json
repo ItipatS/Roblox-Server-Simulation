@@ -3,7 +3,6 @@
     "tree": {
         "$className": "DataModel",
         "ReplicatedStorage": {
-            "$className": "ReplicatedStorage",
             "$path": "src/ReplicatedStorage",
             "ecs": {
                 "$path": "src/jecs.luau"
@@ -16,7 +15,6 @@
             }
         },
         "ServerScriptService": {
-            "$className": "ServerScriptService",
             "$path": "src/ServerScriptService",
             "net": {
                 "$path": "net/server.luau"
@@ -27,6 +25,9 @@
                 "$path": "src/StarterPlayer/StarterPlayerScripts"
             }
         },
+        "StarterGui": {
+      "$path": "src/StarterGui"
+    },
     "Workspace": {
       "$properties": {
         "FilteringEnabled": true

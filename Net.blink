@@ -11,6 +11,19 @@ struct TransformFull {
     dp: vector<f32>,
 }
 
+struct DustState {
+    id: u16,
+    isFleeing: boolean,
+    fleeTimer: f32,
+}
+
+struct DustSpawn {
+    id: u16,
+    pos: vector<f32>,
+    rarity: u8, 
+    flee: boolean,
+}
+
 event UpdateTransformDelta {
     From: Server,
     Type: Unreliable,
@@ -27,10 +40,32 @@ event UpdateTransformFull {
     Data: TransformFull[]
 }
 
-event SpawnMob {
+event SpawnDust {
     From: Server,
     Type: Reliable,
     Call: SingleSync,
-    Poll: true,
-    Data: (f16, CFrame, u8)
+    Poll: false,
+    Data: DustSpawn[]
+}
+
+struct DustDragPayload {
+    id: u16,
+    mode: u8,
+    pos: vector<f16>,
+}
+
+event DustDrag {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: DustDragPayload
+}
+
+event UpdateDustState {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: DustState[]
 }

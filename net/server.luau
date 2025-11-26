@@ -151,8 +151,12 @@ local Queue: any = {
     Unreliable = table.create(256)
 }
 
+Queue.Reliable[2] = table.create(256)
 export type Transform = { id: number, dp: Vector3 }
 export type TransformFull = { id: number, dp: Vector3 }
+export type DustState = { id: number, isFleeing: boolean, fleeTimer: number }
+export type DustSpawn = { id: number, pos: Vector3, rarity: number, flee: boolean }
+export type DustDragPayload = { id: number, mode: number, pos: Vector3 }
 local function WriteEVENT_UpdateTransformDelta(Value: { { id: number, dp: Vector3 } }): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
@@ -251,7 +255,6 @@ local function WriteEVENT_UpdateTransformDelta(Value: { { id: number, dp: Vector
 end
 
 local function WriteEVENT_UpdateTransformFull(Value: { { id: number, dp: Vector3 } }): ()
-	
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -282,42 +285,154 @@ local function WriteEVENT_UpdateTransformFull(Value: { { id: number, dp: Vector3
 	-- END ARRAY
 end
 
-local function WriteEVENT_SpawnMob(Value1: number, Value2: CFrame, Value3: number): ()
-	-- Allocate BLOCK: 28 bytes
-	local BLOCK_START = Allocate(28)
+local function WriteEVENT_SpawnDust(Value: { { id: number, pos: Vector3, rarity: number, flee: boolean } }): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
-	if Value1 > 65504 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 1, 0b0_11111_0000000000)
-	elseif Value1 < -65504 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 1, 0b1_11111_0000000000)
-	elseif Value1 ~= Value1 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 1, 0b1_11111_0000000001)
-	elseif Value1 == 0 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 1, 0)
-	else
-		local float = Value1
-		local Abosulte = math.abs(float)
-		local Interval = math.ldexp(1, math.floor(math.log(Abosulte, 2)) - 10)
-		local RoundedValue = (Abosulte // Interval) * Interval
-		local Fraction, Exponent = math.frexp(RoundedValue)
-		Exponent += 14
-		local Mantissa = math.round(if Exponent <= 0
-			then Fraction * 0x400 / math.ldexp(1, math.abs(Exponent))
-			else Fraction * 0x800) % 0x400
-		local Result = Mantissa
-			+ math.max(Exponent, 0) * 0x400
-			+ if float < 0 then 0x8000 else 0
-		buffer.writeu16(SendBuffer, BLOCK_START + 1, Result)
+	-- START ARRAY
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value)
+		-- Allocate BLOCK: 16 bytes
+	local ARRAY_START_1 = Allocate(16 * #Value)
+	for Index = 1, #Value do
+		local Item_1 = Value[Index]
+		-- Allocate 2
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 2
+		buffer.writeu16(SendBuffer, OPERATION_OFFSET_0, Item_1.id)
+		local Vector = Item_1.pos
+		-- Allocate 4
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 4
+		buffer.writef32(SendBuffer, OPERATION_OFFSET_1, Vector.X)
+		-- Allocate 4
+		local OPERATION_OFFSET_2 = ARRAY_START_1
+		ARRAY_START_1 += 4
+		buffer.writef32(SendBuffer, OPERATION_OFFSET_2, Vector.Y)
+		-- Allocate 4
+		local OPERATION_OFFSET_3 = ARRAY_START_1
+		ARRAY_START_1 += 4
+		buffer.writef32(SendBuffer, OPERATION_OFFSET_3, Vector.Z)
+		-- Allocate 1
+		local OPERATION_OFFSET_4 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_4, Item_1.rarity)
+		-- Allocate 1
+		local OPERATION_OFFSET_5 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_5, Item_1.flee and 1 or 0)
 	end
-	local Vector = Value2.Position
-	buffer.writef32(SendBuffer, BLOCK_START + 3, Vector.X)
-	buffer.writef32(SendBuffer, BLOCK_START + 7, Vector.Y)
-	buffer.writef32(SendBuffer, BLOCK_START + 11, Vector.Z)
-	local rX, rY, rZ = Value2:ToOrientation()
-	buffer.writef32(SendBuffer, BLOCK_START + 15, rX)
-	buffer.writef32(SendBuffer, BLOCK_START + 19, rY)
-	buffer.writef32(SendBuffer, BLOCK_START + 23, rZ)
-	buffer.writeu8(SendBuffer, BLOCK_START + 27, Value3)
+	-- END ARRAY
+end
+
+local function ReadEVENT_DustDrag(): ({ id: number, mode: number, pos: Vector3 })
+	-- Read BLOCK: 9 bytes
+	local BLOCK_START = Read(9)
+	local Value = {} :: any
+	Value.id = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
+	Value.mode = buffer.readu8(RecieveBuffer, BLOCK_START + 2)
+	local Encoded = buffer.readu16(RecieveBuffer, BLOCK_START + 3)
+	local X
+	local MantissaExponent = Encoded % 0x8000
+	if MantissaExponent == 0b0_11111_0000000000  then
+		if Encoded // 0x8000 == 1 then
+			X = -math.huge
+		else
+			X = math.huge
+		end
+	elseif MantissaExponent == 0b1_11111_0000000000   then
+		X = 0 / 0
+	elseif MantissaExponent == 0b0_00000_0000000000   then
+		X = 0
+	else
+		local Mantissa = MantissaExponent % 0x400
+		local Exponent = MantissaExponent // 0x400
+		local Fraction;
+		if Exponent == 0 then
+			Fraction = Mantissa / 0x400
+		else
+			Fraction = Mantissa / 0x800 + 0.5
+		end
+		local Result = math.ldexp(Fraction, Exponent - 14)
+		X = if Encoded // 0x8000 == 1 then -Result else Result
+	end
+	Encoded = buffer.readu16(RecieveBuffer, BLOCK_START + 5)
+	local Y
+	local MantissaExponent = Encoded % 0x8000
+	if MantissaExponent == 0b0_11111_0000000000  then
+		if Encoded // 0x8000 == 1 then
+			Y = -math.huge
+		else
+			Y = math.huge
+		end
+	elseif MantissaExponent == 0b1_11111_0000000000   then
+		Y = 0 / 0
+	elseif MantissaExponent == 0b0_00000_0000000000   then
+		Y = 0
+	else
+		local Mantissa = MantissaExponent % 0x400
+		local Exponent = MantissaExponent // 0x400
+		local Fraction;
+		if Exponent == 0 then
+			Fraction = Mantissa / 0x400
+		else
+			Fraction = Mantissa / 0x800 + 0.5
+		end
+		local Result = math.ldexp(Fraction, Exponent - 14)
+		Y = if Encoded // 0x8000 == 1 then -Result else Result
+	end
+	Encoded = buffer.readu16(RecieveBuffer, BLOCK_START + 7)
+	local Z
+	local MantissaExponent = Encoded % 0x8000
+	if MantissaExponent == 0b0_11111_0000000000  then
+		if Encoded // 0x8000 == 1 then
+			Z = -math.huge
+		else
+			Z = math.huge
+		end
+	elseif MantissaExponent == 0b1_11111_0000000000   then
+		Z = 0 / 0
+	elseif MantissaExponent == 0b0_00000_0000000000   then
+		Z = 0
+	else
+		local Mantissa = MantissaExponent % 0x400
+		local Exponent = MantissaExponent // 0x400
+		local Fraction;
+		if Exponent == 0 then
+			Fraction = Mantissa / 0x400
+		else
+			Fraction = Mantissa / 0x800 + 0.5
+		end
+		local Result = math.ldexp(Fraction, Exponent - 14)
+		Z = if Encoded // 0x8000 == 1 then -Result else Result
+	end
+	Value.pos = Vector3.new(X, Y, Z)
+	return Value
+end
+
+local function WriteEVENT_UpdateDustState(Value: { { id: number, isFleeing: boolean, fleeTimer: number } }): ()
+	-- Allocate BLOCK: 3 bytes
+	local BLOCK_START = Allocate(3)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 3)
+	-- START ARRAY
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value)
+		-- Allocate BLOCK: 7 bytes
+	local ARRAY_START_1 = Allocate(7 * #Value)
+	for Index = 1, #Value do
+		local Item_1 = Value[Index]
+		-- Allocate 2
+		local OPERATION_OFFSET_0 = ARRAY_START_1
+		ARRAY_START_1 += 2
+		buffer.writeu16(SendBuffer, OPERATION_OFFSET_0, Item_1.id)
+		-- Allocate 1
+		local OPERATION_OFFSET_1 = ARRAY_START_1
+		ARRAY_START_1 += 1
+		buffer.writeu8(SendBuffer, OPERATION_OFFSET_1, Item_1.isFleeing and 1 or 0)
+		-- Allocate 4
+		local OPERATION_OFFSET_2 = ARRAY_START_1
+		ARRAY_START_1 += 4
+		buffer.writef32(SendBuffer, OPERATION_OFFSET_2, Item_1.fleeTimer)
+	end
+	-- END ARRAY
 end
 
 if not RunService:IsRunning() then
@@ -335,7 +450,16 @@ if not RunService:IsRunning() then
 		FireList = NOOP,
 		FireExcept = NOOP
 	},
-	SpawnMob = {
+	SpawnDust = {
+		Fire = NOOP,
+		FireAll = NOOP,
+		FireList = NOOP,
+		FireExcept = NOOP
+	},
+	DustDrag = {
+		On = NOOP
+	},
+	UpdateDustState = {
 		Fire = NOOP,
 		FireAll = NOOP,
 		FireList = NOOP,
@@ -398,6 +522,17 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 		-- Read BLOCK: 1 bytes
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		if Index == 2 then
+			local Value: { id: number, mode: number, pos: Vector3 } = ReadEVENT_DustDrag()
+			if Events.Reliable[2] ~= nil then
+				Events.Reliable[2](Player, Value)
+			else
+				if #Queue.Reliable[2] > 256 then
+					warn("[Blink]: Event queue of \"DustDrag\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[2], {Player, Value} :: {any})
+			end
+		end
 	end
 end)
 Unreliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instances: {Instance})
@@ -500,15 +635,15 @@ local Returns = table.freeze({
 			end
 		end,
 	},
-	SpawnMob = {
-		Fire = function(Player: Player, Value1: number, Value2: CFrame, Value3: number): ()
+	SpawnDust = {
+		Fire = function(Player: Player, Value: { { id: number, pos: Vector3, rarity: number, flee: boolean } }): ()
 			Load(PlayersMap[Player])
-			WriteEVENT_SpawnMob(Value1, Value2, Value3)
+			WriteEVENT_SpawnDust(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value1: number, Value2: CFrame, Value3: number): ()
+		FireAll = function(Value: { { id: number, pos: Vector3, rarity: number, flee: boolean } }): ()
 			Load()
-			WriteEVENT_SpawnMob(Value1, Value2, Value3)
+			WriteEVENT_SpawnDust(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 			for _, Player in Players:GetPlayers() do
 				Load(PlayersMap[Player])
@@ -518,9 +653,9 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value1: number, Value2: CFrame, Value3: number): ()
+		FireList = function(List: {Player}, Value: { { id: number, pos: Vector3, rarity: number, flee: boolean } }): ()
 			Load()
-			WriteEVENT_SpawnMob(Value1, Value2, Value3)
+			WriteEVENT_SpawnDust(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 			for _, Player in List do
 				Load(PlayersMap[Player])
@@ -530,9 +665,69 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value1: number, Value2: CFrame, Value3: number): ()
+		FireExcept = function(Except: Player, Value: { { id: number, pos: Vector3, rarity: number, flee: boolean } }): ()
 			Load()
-			WriteEVENT_SpawnMob(Value1, Value2, Value3)
+			WriteEVENT_SpawnDust(Value)
+			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+			for _, Player in Players:GetPlayers() do
+				if Player == Except then
+					continue
+				end
+				Load(PlayersMap[Player])
+				local Position = Allocate(Size)
+				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+				PlayersMap[Player] = Save()
+			end
+		end,
+	},
+	DustDrag = {
+		On = function(Listener: (Player: Player, Value: { id: number, mode: number, pos: Vector3 }) -> ()): () -> ()
+			Events.Reliable[2] = Listener
+			for Index, Arguments in Queue.Reliable[2] do
+				Listener(table.unpack(Arguments))
+			end
+			Queue.Reliable[2] = {}
+			return function (): ()
+				if Events.Reliable[2] == Listener then
+					Events.Reliable[2] = nil
+				end
+			end
+		end
+	},
+	UpdateDustState = {
+		Fire = function(Player: Player, Value: { { id: number, isFleeing: boolean, fleeTimer: number } }): ()
+			Load(PlayersMap[Player])
+			WriteEVENT_UpdateDustState(Value)
+			PlayersMap[Player] = Save()
+		end,
+		FireAll = function(Value: { { id: number, isFleeing: boolean, fleeTimer: number } }): ()
+			Load()
+			WriteEVENT_UpdateDustState(Value)
+			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+			for _, Player in Players:GetPlayers() do
+				Load(PlayersMap[Player])
+				local Position = Allocate(Size)
+				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+				PlayersMap[Player] = Save()
+			end
+		end,
+		FireList = function(List: {Player}, Value: { { id: number, isFleeing: boolean, fleeTimer: number } }): ()
+			Load()
+			WriteEVENT_UpdateDustState(Value)
+			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+			for _, Player in List do
+				Load(PlayersMap[Player])
+				local Position = Allocate(Size)
+				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+				PlayersMap[Player] = Save()
+			end
+		end,
+		FireExcept = function(Except: Player, Value: { { id: number, isFleeing: boolean, fleeTimer: number } }): ()
+			Load()
+			WriteEVENT_UpdateDustState(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
 			for _, Player in Players:GetPlayers() do
 				if Player == Except then
