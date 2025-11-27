@@ -9,7 +9,7 @@ local std = ReplicatedStorage.std
 local world = require(std.world)
 local cts = require(std.components)
 
-local blink = require(game:GetService("ServerScriptService").net)
+local blink = require(game:GetService("ServerScriptService").ServerNet)
 
 local DustDrag = cts.DustDrag
 

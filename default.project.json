@@ -12,16 +12,10 @@
       }
     },
     "ReplicatedStorage": {
-      "$path": "src/ReplicatedStorage",
-      "net": {
-        "$path": "net/client.luau"
-      }
+      "$path": "src/ReplicatedStorage"
     },
     "ServerScriptService": {
-      "$path": "src/ServerScriptService",
-      "net": {
-        "$path": "net/server.luau"
-      }
+      "$path": "src/ServerScriptService"
     },
     "SoundService": {
       "$properties": {
@@ -34,21 +28,6 @@
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "$path": "src/StarterPlayer/StarterPlayerScripts"
-      }
-    },
-    "Workspace": {
-      "Baseplate": {
-        "$className": "Part",
-        "$properties": {
-          "Locked": true,
-          "Position": [0, -10, 0],
-          "Anchored": true,
-          "Size": [512, 20, 512],
-          "Color": [0.3882, 0.3725, 0.3882]
-        }
-      },
-      "$properties": {
-        "FilteringEnabled": true
       }
     }
   }

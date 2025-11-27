@@ -1,5 +1,5 @@
-option ClientOutput = "net/client.luau"
-option ServerOutput = "net/server.luau"
+option ClientOutput = "src/ReplicatedStorage/ClientNet.luau"
+option ServerOutput = "src/ServerScriptService/ServerNet.luau"
 
 struct Transform {
     id: u16,
@@ -22,6 +22,15 @@ struct DustSpawn {
     pos: vector<f32>,
     rarity: string, 
     timeoffset: f32,
+}
+
+struct Count {
+    Normal: u16,
+    Common: u16,
+    Uncommon: u16,
+    Rare: u16,
+    Epic: u16,
+    Legendary: u16,
 }
 
 event UpdateTransformDelta {
@@ -74,5 +83,5 @@ event Firefly {
     From: Server,
     Type: Reliable,
     Call: SingleSync,
-    Data: (u8,u8,u8,u8,u8,u8,)
+    Data: Count
 }

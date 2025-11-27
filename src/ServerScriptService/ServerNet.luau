@@ -155,7 +155,7 @@ Queue.Reliable[2] = table.create(256)
 export type Transform = { id: number, dp: Vector3 }
 export type TransformFull = { id: number, dp: Vector3 }
 export type DustState = { id: number, isFleeing: boolean, fleeTimer: number }
-export type DustSpawn = { id: number, pos: Vector3, rarity: number, timeoffset: number }
+export type DustSpawn = { id: number, pos: Vector3, rarity: string, timeoffset: number }
 export type Count = { Normal: number, Common: number, Uncommon: number, Rare: number, Epic: number, Legendary: number }
 export type DustDragPayload = { id: number, mode: number, pos: Vector3 }
 local function WriteEVENT_UpdateTransformDelta(Value: { { id: number, dp: Vector3 } }): ()
@@ -286,14 +286,14 @@ local function WriteEVENT_UpdateTransformFull(Value: { { id: number, dp: Vector3
 	-- END ARRAY
 end
 
-local function WriteEVENT_SpawnDust(Value: { { id: number, pos: Vector3, rarity: number, timeoffset: number } }): ()
+local function WriteEVENT_SpawnDust(Value: { { id: number, pos: Vector3, rarity: string, timeoffset: number } }): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
 	-- START ARRAY
 	buffer.writeu16(SendBuffer, BLOCK_START + 1, #Value)
-		-- Allocate BLOCK: 19 bytes
-	local ARRAY_START_1 = Allocate(19 * #Value)
+		-- Allocate BLOCK: 20 bytes
+	local ARRAY_START_1 = Allocate(20 * #Value)
 	for Index = 1, #Value do
 		local Item_1 = Value[Index]
 		-- Allocate 2
@@ -313,10 +313,13 @@ local function WriteEVENT_SpawnDust(Value: { { id: number, pos: Vector3, rarity:
 		local OPERATION_OFFSET_3 = ARRAY_START_1
 		ARRAY_START_1 += 4
 		buffer.writef32(SendBuffer, OPERATION_OFFSET_3, Vector.Z)
-		-- Allocate 1
+		local Length = #Item_1.rarity
+		-- Allocate 2
 		local OPERATION_OFFSET_4 = ARRAY_START_1
-		ARRAY_START_1 += 1
-		buffer.writeu8(SendBuffer, OPERATION_OFFSET_4, Item_1.rarity)
+		ARRAY_START_1 += 2
+		buffer.writeu16(SendBuffer, OPERATION_OFFSET_4, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Item_1.rarity, Length)
 		-- Allocate 4
 		local OPERATION_OFFSET_5 = ARRAY_START_1
 		ARRAY_START_1 += 4
@@ -437,15 +440,15 @@ local function WriteEVENT_UpdateDustState(Value: { { id: number, isFleeing: bool
 end
 
 local function WriteEVENT_Firefly(Value: { Normal: number, Common: number, Uncommon: number, Rare: number, Epic: number, Legendary: number }): ()
-	-- Allocate BLOCK: 7 bytes
-	local BLOCK_START = Allocate(7)
+	-- Allocate BLOCK: 13 bytes
+	local BLOCK_START = Allocate(13)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 4)
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.Normal)
-	buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Common)
-	buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Uncommon)
-	buffer.writeu8(SendBuffer, BLOCK_START + 4, Value.Rare)
-	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value.Epic)
-	buffer.writeu8(SendBuffer, BLOCK_START + 6, Value.Legendary)
+	buffer.writeu16(SendBuffer, BLOCK_START + 1, Value.Normal)
+	buffer.writeu16(SendBuffer, BLOCK_START + 3, Value.Common)
+	buffer.writeu16(SendBuffer, BLOCK_START + 5, Value.Uncommon)
+	buffer.writeu16(SendBuffer, BLOCK_START + 7, Value.Rare)
+	buffer.writeu16(SendBuffer, BLOCK_START + 9, Value.Epic)
+	buffer.writeu16(SendBuffer, BLOCK_START + 11, Value.Legendary)
 end
 
 if not RunService:IsRunning() then
@@ -655,12 +658,12 @@ local Returns = table.freeze({
 		end,
 	},
 	SpawnDust = {
-		Fire = function(Player: Player, Value: { { id: number, pos: Vector3, rarity: number, timeoffset: number } }): ()
+		Fire = function(Player: Player, Value: { { id: number, pos: Vector3, rarity: string, timeoffset: number } }): ()
 			Load(PlayersMap[Player])
 			WriteEVENT_SpawnDust(Value)
 			PlayersMap[Player] = Save()
 		end,
-		FireAll = function(Value: { { id: number, pos: Vector3, rarity: number, timeoffset: number } }): ()
+		FireAll = function(Value: { { id: number, pos: Vector3, rarity: string, timeoffset: number } }): ()
 			Load()
 			WriteEVENT_SpawnDust(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -672,7 +675,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireList = function(List: {Player}, Value: { { id: number, pos: Vector3, rarity: number, timeoffset: number } }): ()
+		FireList = function(List: {Player}, Value: { { id: number, pos: Vector3, rarity: string, timeoffset: number } }): ()
 			Load()
 			WriteEVENT_SpawnDust(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
@@ -684,7 +687,7 @@ local Returns = table.freeze({
 				PlayersMap[Player] = Save()
 			end
 		end,
-		FireExcept = function(Except: Player, Value: { { id: number, pos: Vector3, rarity: number, timeoffset: number } }): ()
+		FireExcept = function(Except: Player, Value: { { id: number, pos: Vector3, rarity: string, timeoffset: number } }): ()
 			Load()
 			WriteEVENT_SpawnDust(Value)
 			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances

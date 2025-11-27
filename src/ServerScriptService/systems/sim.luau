@@ -30,13 +30,13 @@ local SIM_TICK = 1 / SIM_TICK_HZ
 local WARP_AREA_SIZE = 50
 local PLAYER_PUSH_RADIUS = 5
 local PLAYER_PUSH_FORCE = 10
-local STOP_Y_MIN = 0.75
+local STOP_Y_MIN = .75
 local STOP_Y_MAX = 15
 
-local FLEE_ANTICIPATION = 0.25
+local FLEE_ANTICIPATION = .5
 local FLEE_RADIUS        = 10
 local MIN_FLEE_SPEED     = 10
-local NEIGHBOR_FLEE_RADIUS = 8
+local NEIGHBOR_FLEE_RADIUS = 5
 
 local EPS = 1e-4
 

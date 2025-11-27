@@ -1,10 +1,10 @@
-local blink = require(game.ReplicatedStorage.net)
+local blink = require(game.ReplicatedStorage.ClientNet)
 local textLabel = script.Parent
 
-blink.Firefly.On(function(Normal, Common, Uncommon, Rare, Epic, Legendary)
+blink.Firefly.On(function(payload)
     local displayText = string.format(
         "Dust Spawn Counts:\nNormal: %d\nCommon: %d\nUncommon: %d\nRare: %d\nEpic: %d\nLegendary: %d",
-        Normal, Common, Uncommon, Rare, Epic, Legendary
+        payload.Normal, payload.Common, payload.Uncommon, payload.Rare, payload.Epic, payload.Legendary
     )
     textLabel.Text = displayText
 	

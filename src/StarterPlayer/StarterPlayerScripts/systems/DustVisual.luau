@@ -6,7 +6,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local FireflyConfig = require(ReplicatedStorage.std.firefly)
 
-local blink = require(ReplicatedStorage.net)
+local blink = require(ReplicatedStorage.ClientNet)
 local std   = ReplicatedStorage.std
 local world = require(std.world)
 local cts   = require(std.components)

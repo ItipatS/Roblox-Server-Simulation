@@ -10,7 +10,7 @@ local world = require(std.world)
 local cts = require(std.components)
 
 local Firefly = require(std.firefly)
-local blink = require(game:GetService("ServerScriptService").net)
+local blink = require(game:GetService("ServerScriptService").ServerNet)
 local Dust = cts.Dust
 local Transform = cts.Transform
 local Velocity = cts.Velocity
@@ -89,17 +89,6 @@ local function initializeDustField()
         count[rarity] += 1
     end
 
-    warn(count.Normal)
-
-    blink.Firefly.FireAll(
-       count.Normal,
-      count.Common,
-       count.Uncommon,
-       count.Rare,
-       count.Epic,
-        count.Legendary
-    )
-
     if #spawnBatch > 0 then
         blink.SpawnDust.FireAll(spawnBatch)
     end
@@ -132,8 +121,14 @@ end
 Players.PlayerAdded:Connect(function(player)
     if not initialized then
         initializeDustField()
+            blink.Firefly.Fire(player,
+            count
+        )
     else
         sendAllDustTo(player)
+            blink.Firefly.Fire(player,
+            count
+        )
     end
 end)
 

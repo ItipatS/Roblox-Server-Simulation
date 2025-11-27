@@ -4,7 +4,7 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local blink = require(ReplicatedStorage.net)
+local blink = require(ReplicatedStorage.ClientNet)
 local std = ReplicatedStorage.std
 local world = require(std.world)
 local ref = require(std.ref)
