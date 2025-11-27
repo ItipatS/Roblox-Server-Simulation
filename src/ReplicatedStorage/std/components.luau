@@ -12,9 +12,10 @@ local components: {
 	Velocity: Entity<number>,
 	Previous: Entity,
 	Size: Entity<number>,
+	Direction: Entity<Vector3>,
 
 	PendingMovements: Entity<{ [number]:{ id:number, dp: Vector3 } }>,
-	PendingStates: Entity<{ [number]:{ id:number, isFleeing: boolean, fleeTimer: number } }>,
+	PendingStates: Entity<{ [number]:{ id:number, isFleeing: boolean, fleeTimer: number} }>,
 
 	Dust: Entity, -- tag
     DustData: Entity<{
@@ -23,6 +24,7 @@ local components: {
     DustState: Entity<{
         isFleeing: boolean,
         fleeTimer: number,
+		iswarped: boolean,
     }>,
     DustDrag: Entity<{
         draggerUserId: number?,
@@ -38,6 +40,7 @@ local components: {
 		Velocity = world:component(),
 		Previous = world:component(),
 		Size = world:component(),
+		Direction = world:component(),
 
 		PendingMovements = world:component(),
 		PendingStates = world:component(),

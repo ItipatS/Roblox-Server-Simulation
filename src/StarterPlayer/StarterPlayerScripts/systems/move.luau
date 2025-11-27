@@ -11,9 +11,9 @@ local ref = require(std.ref)
 local cts = require(std.components)
 local Model = cts.Model
 local Transform = cts.Transform
-
+local DustData = cts.DustData
 -- Query: entities that have a Roblox model and a Transform
-local moved_models = world:query(Model, Transform):cached()
+local moved_models = world:query(Model, Transform, DustData):cached()
 
 -- ---------- Smooth interpolation state ----------
 -- For each entity we keep a small state machine:
@@ -33,11 +33,23 @@ local smooth: { [number]: Smooth } = {}
 local TARGET_SPAN = 0.10   -- 100 ms
 local MIN_SPAN    = 1/120  -- never 0; avoids huge alpha steps
 local MAX_SPAN    = 0.25   -- don't smear too long
+local WOBBLE_INTENSITY = 0.5
+local TELEPORT_DIST_SQ = 30 * 30
+
+local function wobbleOffset(timeoffset)
+    local t = tick() + timeoffset
+            local wobble = Vector3.new(
+                math.sin(t * 1.5),
+                math.cos(t * 2) * 0.5,
+                math.sin(t * 1.2)
+            ) * WOBBLE_INTENSITY
+    return CFrame.new(wobble)
+end
 
 local function beginBlend(e: number, serverCF: CFrame)
     local s = smooth[e]
     if not s then
-        -- first time: start at server pose (no pop)
+        -- first time: no pop
         s = {
             prev = serverCF,
             next = serverCF,
@@ -49,13 +61,24 @@ local function beginBlend(e: number, serverCF: CFrame)
         return
     end
 
-    -- Start new blend FROM what we actually rendered last frame (no rewind)
     local start = s.rendered
+    local dist = (serverCF.Position - start.Position).Magnitude
+
+    -- if jump is huge (warp / teleport), cancel interpolation
+    local distSq = (serverCF.Position - start.Position).Magnitude ^ 2
+    if distSq > TELEPORT_DIST_SQ then
+        s.prev     = serverCF
+        s.next     = serverCF
+        s.rendered = serverCF
+        s.alpha    = 1
+        s.span     = TARGET_SPAN
+        return
+    end
+
+    -- normal smooth blend
     s.prev = start
     s.next = serverCF
 
-    -- Optional: dynamic span based on travel distance (longer jump = slightly longer smoothing)
-    local dist = (s.next.Position - s.prev.Position).Magnitude
     local span = TARGET_SPAN
     if dist > 10 then
         span = math.clamp(TARGET_SPAN * 1.5, MIN_SPAN, MAX_SPAN)
@@ -136,12 +159,12 @@ local function present(dt: number)
     if acc < RENDER_DT then return end
     acc = 0
 
-    for e, model, _ in moved_models do
+    for e, model, transform, dustData in moved_models do
         local m = (model :: Model)
         if m and m.PrimaryPart then
             local cf = stepBlend(e, RENDER_DT)
             if cf then
-                m.PrimaryPart.CFrame = cf
+                m.PrimaryPart.CFrame = cf * wobbleOffset(dustData.timeoffset)
             end
         end
     end

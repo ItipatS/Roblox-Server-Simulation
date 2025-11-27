@@ -1,77 +1,55 @@
 {
-    "name": "demo",
-    "tree": {
-        "$className": "DataModel",
-        "ReplicatedStorage": {
-            "$path": "src/ReplicatedStorage",
-            "ecs": {
-                "$path": "src/jecs.luau"
-            },
-            "net": {
-                "$path": "net/client.luau"
-            },
-            "Packages": {
-                "$path": "Packages"
-            }
-        },
-        "ServerScriptService": {
-            "$path": "src/ServerScriptService",
-            "net": {
-                "$path": "net/server.luau"
-            }
-        },
-        "StarterPlayer": {
-            "StarterPlayerScripts": {
-                "$path": "src/StarterPlayer/StarterPlayerScripts"
-            }
-        },
-        "StarterGui": {
-      "$path": "src/StarterGui"
-    },
-    "Workspace": {
-      "$properties": {
-        "FilteringEnabled": true
-      },
-      "Baseplate": {
-        "$className": "Part",
-        "$properties": {
-          "Anchored": true,
-          "Color": [
-            0.38823,
-            0.37254,
-            0.38823
-          ],
-          "Locked": true,
-          "Position": [
-            0,
-            -10,
-            0
-          ],
-          "Size": [
-            512,
-            20,
-            512
-          ]
-        }
-      }
-    },
+  "name": "demo",
+  "tree": {
+    "$className": "DataModel",
     "Lighting": {
       "$properties": {
-        "Ambient": [
-          0,
-          0,
-          0
-        ],
-        "Brightness": 2,
         "GlobalShadows": true,
         "Outlines": false,
-        "Technology": "Voxel"
+        "Technology": "Voxel",
+        "Brightness": 2,
+        "Ambient": [0, 0, 0]
+      }
+    },
+    "ReplicatedStorage": {
+      "$path": "src/ReplicatedStorage",
+      "net": {
+        "$path": "net/client.luau"
+      }
+    },
+    "ServerScriptService": {
+      "$path": "src/ServerScriptService",
+      "net": {
+        "$path": "net/server.luau"
       }
     },
     "SoundService": {
       "$properties": {
         "RespectFilteringEnabled": true
       }
+    },
+    "StarterGui": {
+      "$path": "src/StarterGui"
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "src/StarterPlayer/StarterPlayerScripts"
+      }
+    },
+    "Workspace": {
+      "Baseplate": {
+        "$className": "Part",
+        "$properties": {
+          "Locked": true,
+          "Position": [0, -10, 0],
+          "Anchored": true,
+          "Size": [512, 20, 512],
+          "Color": [0.3882, 0.3725, 0.3882]
+        }
+      },
+      "$properties": {
+        "FilteringEnabled": true
+      }
     }
-    }
+  }
 }

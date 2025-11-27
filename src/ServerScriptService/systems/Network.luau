@@ -21,8 +21,10 @@ local MAX_BATCH_SIZE = 64
 
 local lastFullSync = 0
 local last_accum = 0
-local ToSendFull = table.create(128)
-local ToSendDelta = table.create(MAX_BATCH_SIZE)
+local ToSendMovementFull = table.create(128)
+local ToSendStateFull = table.create(128)
+local ToSendMovement = table.create(MAX_BATCH_SIZE)
+local ToSendState    = table.create(MAX_BATCH_SIZE)
 
 local moving_mobs = world:query(cts.Transform, cts.Velocity, cts.Size):with(cts.Dust):cached()
 local stated_mob = world:query(cts.DustState):with(cts.Dust):cached()
@@ -43,47 +45,66 @@ local function networkSystem(dt: number)
 
     last_accum = 0
 
-    table.clear(ToSendDelta)
-
+    table.clear(ToSendMovement)
     mailbox.drain(cts.PendingMovements, function(item)
-        ToSendDelta[#ToSendDelta+1] = item
-        if #ToSendDelta >= MAX_BATCH_SIZE then
-            flush(blink.UpdateTransformDelta, ToSendDelta)
+        if not item then return end
+        ToSendMovement[#ToSendMovement+1] = item
+        if #ToSendMovement >= MAX_BATCH_SIZE then
+            flush(blink.UpdateTransformDelta, ToSendMovement)
         end
     end)
 
+    flush(blink.UpdateTransformDelta, ToSendMovement)
+
+    table.clear(ToSendState)
     mailbox.drain(cts.PendingStates, function(item)
-        ToSendDelta[#ToSendDelta+1] = item
-        if #ToSendDelta >= MAX_BATCH_SIZE then
-            flush(blink.DustState, ToSendDelta)
+        if not item then return end
+        ToSendState[#ToSendState+1] = item
+        if #ToSendState >= MAX_BATCH_SIZE then
+            flush(blink.UpdateDustState, ToSendState)
         end
     end)
+    flush(blink.UpdateDustState, ToSendState)
 
     -- Full sync logic
     if lastFullSync >= FULL_SYNC_INTERVAL then
         lastFullSync = 0
-        table.clear(ToSendFull)
         
+        table.clear(ToSendMovementFull)
         for mob, transform in moving_mobs do
-            ToSendFull[#ToSendFull + 1] = { 
+            ToSendMovementFull[#ToSendMovementFull + 1] = { 
                 id = mob,
                 dp = transform.new.Position
             }
-            if #ToSendFull >= 128 then
-			blink.UpdateTransformFull.FireAll(ToSendFull)
-			table.clear(ToSendFull)
+            if #ToSendMovementFull >= 128 then
+			blink.UpdateTransformFull.FireAll(ToSendMovementFull)
+			table.clear(ToSendMovementFull)
+            end
+        end
+
+        table.clear(ToSendStateFull)
+        for DustStateEntity, state in stated_mob do
+            ToSendStateFull[#ToSendStateFull + 1] = {
+                id = DustStateEntity,
+                isFleeing = state.isFleeing,
+                fleeTimer = state.fleeTimer,
+            }
+            if #ToSendStateFull >= 128 then
+            blink.UpdateDustState.FireAll(ToSendStateFull)
+            table.clear(ToSendStateFull)
             end
         end
 
         
         -- Send full state to correct any drift
-		if #ToSendFull > 0 then
-        	blink.UpdateTransformFull.FireAll(ToSendFull)
-			table.clear(ToSendFull)
-		end
-    else
-        if #ToSendDelta > 0 then
-            blink.UpdateTransformDelta.FireAll(ToSendDelta)
+		if #ToSendMovementFull > 0 then
+        	blink.UpdateTransformFull.FireAll(ToSendMovementFull)
+			table.clear(ToSendMovementFull)
+        end
+
+        if #ToSendStateFull then
+            blink.UpdateDustState.FireAll(ToSendStateFull)
+			table.clear(ToSendStateFull)
         end
     end
 end

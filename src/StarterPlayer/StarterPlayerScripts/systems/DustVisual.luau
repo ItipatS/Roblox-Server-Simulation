@@ -28,22 +28,52 @@ local RENDER_HZ = 60
 local RENDER_DT = 1 / RENDER_HZ
 local acc = 0
 
-local function stepColor(data, dt: number)
+local function stepColor(data, part , dt: number)
 
-    local ColorSequence = FireflyConfig.RARITY_COLOR_SEQUENCE[data.rarity] or {}
+    if not data.rarity then return end
 
-    if not ColorSequence or #ColorSequence == 0 then return end
-    if #ColorSequence == 1 then
-        data.CurrentColorIndex = 1
-        return
+    local rarityConfig = FireflyConfig.RARITY_COLOR_SEQUENCE[data.rarity]
+    if not rarityConfig then return end
+
+    local ColorSequence = rarityConfig[1] or {}
+    if #ColorSequence == 0 then return end
+
+    data.CurrentColorIndex  = data.CurrentColorIndex  or 1
+    data.ColorTimer         = data.ColorTimer         or 0
+    data.ColorBlendDuration = data.ColorBlendDuration or math.random(2, 5)
+    data.Color              = data.Color              or ColorSequence[data.CurrentColorIndex]
+
+    if data.rarity ~= "Legendary" then
+
+        data.ColorTimer += dt
+
+        if #ColorSequence > 1 then
+            local nextIndex = data.CurrentColorIndex + 1
+            if nextIndex > #ColorSequence then
+                nextIndex = 1
+            end
+
+            local blendAlpha = math.clamp(
+                data.ColorTimer / (data.ColorBlendDuration or math.random(2, 5)),
+                0, 1
+            )
+            local fromColor = ColorSequence[data.CurrentColorIndex]
+            local toColor = ColorSequence[nextIndex]
+
+            data.Color = fromColor:Lerp(toColor, blendAlpha)
+
+            if blendAlpha >= 1 then
+                data.CurrentColorIndex = nextIndex
+                data.ColorTimer = 0
+                data.ColorBlendDuration = math.random(2, 5)
+            end
+        end
+    else
+        -- Rainbow: cycle hue smoothly
+        local hue = tick() % 5 / 5
+        data.Color = Color3.fromHSV(hue, 1, 1)
     end
-
-    data.ColorTimer += dt
-    if data.ColorTimer >= data.ColorDuration then
-        data.ColorTimer = 0
-        data.ColorDuration = math.random(2, 5)
-        data.CurrentColorIndex = ColorSequence[math.random(1, #ColorSequence)]
-    end
+    part.Color = data.Color
 end
 
 local function dustVisualSystem(dt: number)
@@ -58,13 +88,13 @@ local function dustVisualSystem(dt: number)
         if not part then continue end
         if not data then continue end
 
-        stepColor(data, step)
+        stepColor(data, part, step)
+        world:set(e, DustData, data)
 
         if state.isFleeing then
-            part.Transparency = 1 -- no glow: invisible
+            part.Transparency = 0.5
         else
             part.Transparency = 0
-            part.Color = data.CurrentColorIndex
         end
     end
 end
@@ -76,6 +106,7 @@ blink.UpdateDustState.On(function(payload)
         if state then
             state.isFleeing = entry.isFleeing
             state.fleeTimer = entry.fleeTimer
+            world:set(e, DustState, state)
         end
     end
 end)

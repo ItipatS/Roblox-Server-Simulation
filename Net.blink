@@ -20,8 +20,8 @@ struct DustState {
 struct DustSpawn {
     id: u16,
     pos: vector<f32>,
-    rarity: u8, 
-    flee: boolean,
+    rarity: string, 
+    timeoffset: f32,
 }
 
 event UpdateTransformDelta {
@@ -68,4 +68,11 @@ event UpdateDustState {
     Call: SingleSync,
     Poll: false,
     Data: DustState[]
+}
+
+event Firefly {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Data: (u8,u8,u8,u8,u8,u8,)
 }
