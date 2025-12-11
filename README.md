@@ -1,4 +1,4 @@
-# JECS Server Authoritative Dust Field – 2,500 Entities on Custom Net (Blink)
+# JECS Server Authoritative Dust Field – 1,500 Entities on Custom Net (Blink)
 
 This project is a **JECS-only simulation** of thousands of “dust” / firefly particles, driven entirely by:
 
@@ -10,7 +10,7 @@ Compared to my other JECS RPG/Mob demo (which leans on Roblox physics and replic
 
 > Turn Roblox into a pure data-sim and stream just the minimal deltas over a custom net layer.
 
-With **2,500 dust entities**, the system runs at around **~200 KB/s network intake** (client), with smooth visuals and state changes.
+With **1,500 dust entities**, the system runs at around **~200 KB/s network intake** (client), with smooth visuals and state changes.
 # Demo Place
 https://www.roblox.com/games/129984384759966/Server-Simulation
 ---
@@ -19,7 +19,7 @@ https://www.roblox.com/games/129984384759966/Server-Simulation
 [![Watch the video](https://img.youtube.com/vi/ooikRRlfHRs/0.jpg)](https://youtu.be/ooikRRlfHRs)
 ---
 ## Features
-- **2,500+ dust entities** simulated server-side
+- **1,500+ dust entities** simulated server-side
 - **Player interaction**
   - Dust flees from predicted player movement direction
   - Push reactions when players run through dust
