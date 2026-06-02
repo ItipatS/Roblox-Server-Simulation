@@ -10,6 +10,8 @@ local world = require(std.world)
 local ref = require(std.ref)
 local cts = require(std.components)
 local FireflyConfig = require(std.firefly)
+local slotmap = require(std.slotmap)
+local FieldEval = require(std.fieldeval)
 
 local Dust      = cts.Dust
 local ModelComp = cts.Model
@@ -46,6 +48,11 @@ blink.SpawnDust.On(function(payload)
 		local seq = FireflyConfig.chooseColorFromPool(rarityName)
 
 		local e = ref("server-" .. tostring(id))
+
+		-- Record slot -> entity so the dense (id-less) delta stream can resolve targets.
+		if entry.slot ~= nil then
+			slotmap.set(entry.slot, e)
+		end
 
 		-- If this is a re-send (join-late or re-sync), avoid duplicating models
 		local existingModel = world:get(e, ModelComp)
@@ -88,6 +95,21 @@ blink.SpawnDust.On(function(payload)
 			fleeTimer = 0, -- client can use this for visual easing if it wants
 		})
     end
+end)
+
+-- The dust count changed: tear down the current field (models + ECS + slotmap) and
+-- re-shape the ocean layout for the new count. SpawnDust arrives right after to rebuild.
+blink.RebuildDust.On(function(newCount: number)
+    for _, e in slotmap.map do
+        local model = world:get(e, ModelComp)
+        if model then
+            (model :: Model):Destroy()
+        end
+        world:delete(e)
+    end
+    slotmap.clear()
+    ref.clear() -- drop stale "server-<id>" entries; ids get recycled on the new field
+    FieldEval.setCount(newCount)
 end)
 
 

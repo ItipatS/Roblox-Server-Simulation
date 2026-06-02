@@ -38,8 +38,6 @@ local FLEE_RADIUS        = 10
 local MIN_FLEE_SPEED     = 10
 local NEIGHBOR_FLEE_RADIUS = 5
 
-local EPS = 1e-4
-
 local newFleers = table.create(128)
 
 local last_accum = 0
@@ -108,7 +106,6 @@ local function dustSystem(dt: number)
     for e, transform, data, state, drag, velocity, dir in dustQuery do
         local cf = transform.new
         local pos = cf.Position
-        local lastPos = pos
 
         local speed = velocity or DUST_SPEED
 
@@ -214,20 +211,11 @@ local function dustSystem(dt: number)
         -- 6. Update flee timer & send state to network
         ----------------------------------------------------------------
 
-        local dp = pos - lastPos
-
         transform.new = CFrame.lookAt(pos, pos + dir)
 
-        if dp.Magnitude > EPS then
-            mailbox.push(cts.PendingMovements, {
-                id = e,
-                dp = dp,
-            })
-        end
-
-        if xWarped or zWarped then
-            dp = Vector3.zero
-        end
+        -- Movement is replicated by Network.luau, which diffs Transform positions per
+        -- slot each network tick (no per-tick mailbox push needed here).
+        local _ = xWarped or zWarped
 
         if state.isFleeing then
             state.fleeTimer -= step_dt

@@ -13,6 +13,7 @@ local components: {
 	Previous: Entity,
 	Size: Entity<number>,
 	Direction: Entity<Vector3>,
+	Slot: Entity<number>,
 
 	PendingMovements: Entity<{ [number]:{ id:number, dp: Vector3 } }>,
 	PendingStates: Entity<{ [number]:{ id:number, isFleeing: boolean, fleeTimer: number} }>,
@@ -41,6 +42,7 @@ local components: {
 		Previous = world:component(),
 		Size = world:component(),
 		Direction = world:component(),
+		Slot = world:component(),
 
 		PendingMovements = world:component(),
 		PendingStates = world:component(),

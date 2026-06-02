@@ -7,6 +7,12 @@ local blink = require(ReplicatedStorage.ClientNet)
 local std = ReplicatedStorage.std
 local world = require(std.world)
 local ref = require(std.ref)
+local slotmap = require(std.slotmap)
+local FieldEval = require(std.fieldeval)
+local Modes = require(std.modes)
+
+-- Must match Network.luau's quantization step.
+local DELTA_STEP = 0.02
 
 local cts = require(std.components)
 local Model = cts.Model
@@ -120,17 +126,32 @@ end
 
 -- --- Network handlers (register once) ---
 
--- Delta updates: [{ id: number, dp: Vector3 }, ...]
-blink.UpdateTransformDelta.On(function(payload)
-    for _, entry in payload do
-        local e = ref("server-" .. tostring(entry.id))
+-- Dense delta packet: { base: number, deltas: i8[] }
+-- deltas are int8 triplets in slot order; slot = base + k. No per-dust id on the wire,
+-- so we resolve slot -> entity via slotmap (populated on SpawnDust).
+local map = slotmap.map
+blink.UpdateTransformDelta.On(function(packet)
+    local base = packet.base
+    local deltas = packet.deltas
+    local n = #deltas
+    local slot = base
+    for i = 1, n, 3 do
+        local x = deltas[i]
+        local y = deltas[i + 1]
+        local z = deltas[i + 2]
 
-        -- authoritatively advance ECS Transform
-        local t = ensureTransform(e)
-        t.new = t.new + entry.dp
+        -- skip stationary dust (sent as zeros to keep the stream dense)
+        if x ~= 0 or y ~= 0 or z ~= 0 then
+            local e = map[slot]
+            if e then
+                -- authoritatively advance ECS Transform by the dequantized delta
+                local t = ensureTransform(e)
+                t.new = t.new + Vector3.new(x * DELTA_STEP, y * DELTA_STEP, z * DELTA_STEP)
+                beginBlend(e, t.new)
+            end
+        end
 
-        -- start a smooth blend FROM current rendered TO new server pose
-        beginBlend(e, t.new)
+        slot += 1
     end
 end)
 
@@ -154,10 +175,91 @@ local RENDER_HZ = 60
 local RENDER_DT = 1 / RENDER_HZ
 local acc = 0
 
+-- Ocean mode: ignore the (now-silent) server position stream and reconstruct the
+-- field locally from slot + synced clock. Position and color come straight from the
+-- shared evaluator, so every client renders the identical wave.
+local function renderOcean(dt: number)
+    local now = FieldEval.now()
+    FieldEval.prune(now)
+    FieldEval.refreshPlayers(dt)
+    for slot, e in slotmap.map do
+        local model = world:get(e, Model)
+        local m = model :: Model?
+        if m and m.PrimaryPart then
+            local pos, color = FieldEval.oceanSample(slot, now)
+            local part = m.PrimaryPart
+            part.CFrame = CFrame.new(pos)
+            part.Color = color
+        end
+    end
+end
+
+-- Wall mode: an upright curtain reconstructed from slot, disturbed by hit shockwaves.
+-- No per-player velocity needed (hits arrive as server events), just prune + sample.
+local function renderWall()
+    local now = FieldEval.now()
+    FieldEval.prune(now)
+    for slot, e in slotmap.map do
+        local model = world:get(e, Model)
+        local m = model :: Model?
+        if m and m.PrimaryPart then
+            local pos, color = FieldEval.wallSample(slot, now)
+            local part = m.PrimaryPart
+            part.CFrame = CFrame.new(pos)
+            part.Color = color
+        end
+    end
+end
+
+-- Hunt mode: dust rest in a cloud and flee the server-streamed leaders.
+local function renderFlock()
+    local now = FieldEval.now()
+    for slot, e in slotmap.map do
+        local model = world:get(e, Model)
+        local m = model :: Model?
+        if m and m.PrimaryPart then
+            local pos, color = FieldEval.flockSample(slot, now)
+            local part = m.PrimaryPart
+            part.CFrame = CFrame.new(pos)
+            part.Color = color
+        end
+    end
+end
+
+-- Spread mode: static field, colored by the server-streamed per-dust heat.
+local function renderSpread()
+    local now = FieldEval.now()
+    for slot, e in slotmap.map do
+        local model = world:get(e, Model)
+        local m = model :: Model?
+        if m and m.PrimaryPart then
+            local pos, color = FieldEval.spreadSample(slot, now)
+            local part = m.PrimaryPart
+            part.CFrame = CFrame.new(pos)
+            part.Color = color
+        end
+    end
+end
+
 local function present(dt: number)
     acc += dt
     if acc < RENDER_DT then return end
+    local elapsed = acc
     acc = 0
+
+    if FieldEval.mode == Modes.Ocean or FieldEval.mode == Modes.Shore then
+        renderOcean(elapsed)
+        return
+    elseif FieldEval.mode == Modes.Wall then
+        renderWall()
+        return
+    elseif FieldEval.mode == Modes.Hunt then
+        renderFlock()
+        return
+    elseif FieldEval.mode == Modes.Spread then
+        renderSpread()
+        return
+    end
 
     for e, model, transform, dustData in moved_models do
         local m = (model :: Model)

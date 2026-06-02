@@ -1,9 +1,9 @@
 option ClientOutput = "src/ReplicatedStorage/ClientNet.luau"
 option ServerOutput = "src/ServerScriptService/ServerNet.luau"
 
-struct Transform {
-    id: u16,
-    dp: vector<f16>,
+struct DeltaPacket {
+    base: u16,
+    deltas: i8[],
 }
 
 struct TransformFull {
@@ -19,8 +19,9 @@ struct DustState {
 
 struct DustSpawn {
     id: u16,
+    slot: u16,
     pos: vector<f32>,
-    rarity: string, 
+    rarity: string,
     timeoffset: f32,
 }
 
@@ -38,7 +39,7 @@ event UpdateTransformDelta {
     Type: Unreliable,
     Call: SingleSync,
     Poll: false,
-    Data: Transform[]
+    Data: DeltaPacket
 }
 
 event UpdateTransformFull {
@@ -84,4 +85,119 @@ event Firefly {
     Type: Reliable,
     Call: SingleSync,
     Data: Count
+}
+
+-- ---- Presentation modes ----------------------------------------------------
+-- Mode id: 0 = Drift (default sim), 1 = Ocean, 2 = Wall.
+-- Server broadcasts the active mode; clients render the field locally, so a whole-
+-- field wave costs nothing on the wire (it's a pure function of slot + synced clock).
+
+event SetMode {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: u8
+}
+
+-- A one-shot field disturbance (e.g. a jump splash). One broadcast -> every client
+-- evaluates an outward ripple locally. kind: 0 = splash.
+struct FieldEventPayload {
+    kind: u8,
+    origin: vector<f32>,
+}
+
+event FieldEvent {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: FieldEventPayload
+}
+
+-- Client asks the server to switch modes (from the mode button UI). Server is the
+-- authority: it validates, sets the mode, then SetMode.FireAll.
+event RequestSetMode {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: u8
+}
+
+-- ---- Runtime dust-count control --------------------------------------------
+-- One controller at a time (first-come-first-serve). The client UI claims/releases
+-- control and (while holding it) requests a new dust count; the server respawns the
+-- field and tells everyone to rebuild.
+
+-- claim = 1, release = 0
+event RequestControl {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: u8
+}
+
+event RequestDustCount {
+    From: Client,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: u16
+}
+
+-- Broadcast lock state + current count to every client for the control UI. holder is
+-- the controlling player's name, or "" when control is free.
+struct ControlStatePayload {
+    holder: string,
+    count: u16,
+}
+
+event ControlState {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: ControlStatePayload
+}
+
+-- Tells clients to tear down the current dust field (count changed). The fresh field
+-- arrives immediately after on SpawnDust.
+event RebuildDust {
+    From: Server,
+    Type: Reliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: u16
+}
+
+-- ---- Hunt mode (leaders + followers) ---------------------------------------
+-- The server fully simulates a small flock of predator "leaders" (emergent boids) and
+-- streams just their positions. The array index is the stable leader id. ~dozens of
+-- f16 vectors per tick — tiny — and the 3000 dust flee them on the client.
+event LeaderState {
+    From: Server,
+    Type: Unreliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: vector<f16>[]
+}
+
+-- ---- Spread mode (contagion) -----------------------------------------------
+-- Unlike the formula water/wall modes, the dust here carry server-authoritative STATE
+-- that depends on their neighbors (a spreading wildfire). Position is a static formula
+-- (not sent); the per-dust heat IS the emergent data, streamed densely in slot order
+-- (heat[k] is slot base+k). Watching this scalar flow over the wire is the whole point.
+struct HeatPacket {
+    base: u16,
+    heat: u8[],
+}
+
+event UpdateHeat {
+    From: Server,
+    Type: Unreliable,
+    Call: SingleSync,
+    Poll: false,
+    Data: HeatPacket
 }

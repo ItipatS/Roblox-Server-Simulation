@@ -13,6 +13,8 @@ local cts   = require(std.components)
 local scheduler = require(std.scheduler)
 local phases    = require(std.phases)
 local ref   = require(std.ref)
+local FieldEval = require(std.fieldeval)
+local Modes     = require(std.modes)
 
 local Dust      = cts.Dust
 local Model     = cts.Model
@@ -81,6 +83,12 @@ local function dustVisualSystem(dt: number)
     if acc < RENDER_DT then return end
     local step = acc
     acc = 0
+
+    -- A presentation mode (Ocean, ...) drives color itself in move.luau; don't fight it
+    -- with the rarity cycle / flee transparency.
+    if FieldEval.mode ~= Modes.Drift then
+        return
+    end
 
     for e, model, data, state in dustQuery do
         local m = model :: Model
